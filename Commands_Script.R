@@ -1,16 +1,16 @@
 # Commands for RepData_PeerAssessment1
 
-## Setup
+## 1. Set up and read in data
 
 # load packages used in processing and charting
 
-library(dplyr)
-library(ggplot2)
+if (!require(dplyr)) {install.packages("dplyr")}
+if (!require(ggplot2)) {install.packages("ggplot2")}
 
 # create directory for figures
 if (!file.exists("figures")) {dir.create("figures")}
 
-## 1. Reading in the dataset and pre-processing the data
+# Reading in the data
 
 conxn <- unz("activity.zip","activity.csv")
 
@@ -32,18 +32,17 @@ stepsbydt_na <- activity %>% group_by(date) %>% summarize(StepsPerDay =
 # Plot histogram of steps taken each day. Note: let na.rm = FALSE so that explicit warning message
 # generated, with count of dates that have sum(steps) == NA
 histNoNA <- ggplot(stepsbydt_na, aes(StepsPerDay/1000)) + stat_bin(binwidth = 1, center = 0.5,
-        closed = "right", na.rm = FALSE) + 
+        closed = "right", alpha = 0.4, na.rm = FALSE) + 
         scale_x_continuous(minor_breaks = seq(0,22,1), labels = function(x){paste0(x, "K")}) +
         scale_y_continuous(breaks = seq(0,20,2)) +
-        labs(x = "Thousand Steps per Day", y = "Number of Days", title =
+        labs(x = "Thousands of Steps per Day", y = "Number of Days", title =
         "Histogram of Steps Taken per Day (Excluding NAs)")
 print(histNoNA)
 png("figures/histNoNA.png", width = 1000)
 print(histNoNA)
 dev.off()
 
-
-## Mean and median number of steps taken each day
+## 3. Mean and median number of steps taken each day
 summary(stepsbydt_na$StepsPerDay, na.rm = FALSE)
 
 
@@ -90,7 +89,7 @@ stepsbyintchar[which.max(stepsbyintchar$StepsPerMin),]
 
 ## 6. Impute missing data
 
-## 6.1 Total number of missing values in original data set
+## Total number of missing values in original data set
 
 summary(activity$steps, na.rm = FALSE)
 # Note that this is exactly equal to 8 days of missing data
@@ -101,7 +100,7 @@ with(activity, unique(date[is.na(steps)]))
 
 
 
-## 6.3 Create new dataset with missing values filled in
+## Create new dataset with missing values filled in
 
 # Though we know the exact location of all the NAs, we use a general procedure to
 # replace them in the original data
@@ -135,7 +134,7 @@ stepsbydtimp <- activityimp %>% group_by(date) %>% summarize(StepsPerDay =
 # Plot histogram of steps taken per day. Note that 8 days of imputed data have been
 # added to the interval containing the median & mean steps per day
 histNAimputed <- ggplot(stepsbydtimp, aes(StepsPerDay/1000)) + stat_bin(binwidth = 1, center = 0.5,
-        closed = "right", na.rm = TRUE) +
+        closed = "right", alpha = 0.4, na.rm = TRUE) +
         scale_x_continuous(minor_breaks = seq(0,22,1), labels = function(x){paste0(x, "K")}) +
         scale_y_continuous(breaks = seq(0,20,2)) +
         labs(x = "Thousand Steps Per Day", y = "Number of Days", title =
@@ -168,12 +167,12 @@ NA_Treatment <- as.factor(c(rep("NAs Excluded", nrow(stepsbydt_na)),
 stepsbydt_impexc <- rbind(stepsbydt_na, stepsbydtimp)
 stepsbydt_impexc$NA_Treatment <- NA_Treatment
 histPanelNAimputed <- ggplot(stepsbydt_impexc, aes(StepsPerDay/1000)) + stat_bin(binwidth = 1,
-        center = 0.5, closed = "right", na.rm = FALSE) + 
+        center = 0.5, closed = "right", alpha = 0.4, na.rm = FALSE) + 
         scale_x_continuous(minor_breaks = seq(0,22,1), labels = function(x){paste0(x, "K")}) +
         scale_y_continuous(breaks = seq(0,20,4)) +
         facet_grid(NA_Treatment~.) +
         labs(x = "Thousand Steps Per Day", y = "Number of Days", title =
-        "Histograms by Treatment of NAs: Number of Days by Thousand Steps")
+        "Histograms by Treatment of NAs: Number of Days per Thousand Steps")
 print(histPanelNAimputed)
 png("figures/histPanelNAimputed.png")
 print(histPanelNAimputed)
@@ -236,13 +235,29 @@ dev.off()
 # By eye-balling the charts, one can see that on weekends (as compared to weekdays) our walker
 # is slower getting started, has lower maximum steps per interval, walks fewer steps
 # throughout the day, and, finally, winds down more slowly (distribution of steps has its final
-# local maximum later in the day, e.g., around 8PM or so on weekends vs. 7PM on weekdays).
+# local maximum later in the day, i.e., around 8PM or so on weekends vs. 7PM on weekdays).
+
+## sessionInfo()
+
+# R version 3.3.1 (2016-06-21)
+# Platform: x86_64-w64-mingw32/x64 (64-bit)
+# Running under: Windows 7 x64 (build 7601) Service Pack 1
+
+# locale:
+# [1] LC_COLLATE=English_United States.1252  LC_CTYPE=English_United States.1252   
+# [3] LC_MONETARY=English_United States.1252 LC_NUMERIC=C                          
+# [5] LC_TIME=English_United States.1252    
+
+# attached base packages:
+# [1] stats     graphics  grDevices utils     datasets  methods   base     
+
+# loaded via a namespace (and not attached):
+# [1] colorspace_1.2-7 scales_0.4.1     assertthat_0.1   lazyeval_0.2.0   plyr_1.8.4       tools_3.3.1     
+# [7] gtable_0.2.0     tibble_1.2       Rcpp_0.12.7      ggplot2_2.2.0    grid_3.3.1       munsell_0.4.3   
 
 
-
-
-
-
+## Possibly useful stuff (old)
+## ==============================
 
 summary(activity$interval/60) # summarize distribution of intervals in fractional hours
 sum(is.na(activity$steps))/nrow(activity) # calc fraction of intervals for which steps = NA

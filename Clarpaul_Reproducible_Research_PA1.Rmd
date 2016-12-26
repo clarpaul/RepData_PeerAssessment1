@@ -1,0 +1,176 @@
+---
+title: 'Reproducible Research: Peer Assessment 1'
+author: "Paul Clark"
+date: "December 25, 2016"
+output: html_document
+---
+
+This assignment uses data from a personal activity monitoring
+device. This data was collected from an anonymous individual during October and November, 2012, and includes the number of steps taken in 5 minute intervals. Here, we explore the data to:
+
+ * Understand the distribution of steps per day
+ * Profile the number of steps per 5-min period, averaged over the two months
+ * Understand the impact of imputing missing values
+ * Evaluate the differences between step profiles on weekdays vs. weekends
+
+This document is structured so as to demonstrate fulfillment, in order, of the 9 requirements for a successful submission.  These are listed in the the section titled _**Commit containing full submission**_ within the assignment _**Review Criteria**_.    
+\
+
+
+#### 1. Set up environment and read data
+
+Before starting, we must set up our environment and read the data.
+
+```{r message = FALSE, warning = FALSE, collapse=TRUE, cache=FALSE}
+# Set up our environment and directory structure
+if (!require(dplyr)) {install.packages("dplyr")}
+if (!require(ggplot2)) {install.packages("ggplot2")}
+# Create directory for figures
+if (!file.exists("figures")) {dir.create("figures")}
+```
+```{r cache=TRUE}
+# Read in the data from the zipped file
+conxn <- unz("activity.zip","activity.csv")
+# Note: The file consists of 3 columns of data: steps, date, and 5-min interval.
+activity <- read.csv(conxn, colClasses = c("integer", "character", "integer"))
+# `read.csv` closes the conxn, but we also remove it from our environment.
+rm(conxn)
+```
+\
+
+
+#### 2. Histogram of number of steps taken per day
+
+To obtain the histogram, we first group the `activity` dataframe by date and sum over the steps taken each day. Note that in doing so, it's very important to set `na.rm = FALSE` in `sum`, as otherwise the `summarize` function will include zeroes for dates with `NA`s. We want these dates to be propoerly recognized as containing missing data.
+
+```{r cache=TRUE}
+# Computing steps by date
+stepsbydt_na <- activity %>% group_by(date) %>% summarize(StepsPerDay = sum(steps, na.rm = FALSE))
+```
+
+We then plot the desired histogram using `ggplot`, and save it in the target directory.  We let `na.rm = FALSE` so that explicit warning messages are generated, confirming the number of days for which the underlying data contained `NA`s.
+
+```{r cache=TRUE, collapse = FALSE}
+# Plotting the histogram
+(histNoNA <- ggplot(stepsbydt_na, aes(StepsPerDay/1000)) + stat_bin(binwidth = 1, center = 0.5,
+        closed = "right", alpha = 0.4, na.rm = FALSE) + 
+        scale_x_continuous(minor_breaks = seq(0,22,1), labels = function(x){paste0(x, "K")}) +
+        scale_y_continuous(breaks = seq(0,20,2)) +
+        labs(x = "Thousands of Steps per Day", y = "Number of Days", title =
+        "Histogram of Steps Taken per Day (Excluding NAs)"))
+```
+```{r warning=FALSE, message=FALSE, collapse=TRUE, results='hide'}
+# Saving the histogram as a separate file
+png("figures/histNoNA.png", width = 1000)
+print(histNoNA)
+dev.off()
+```
+\
+
+
+#### 3. Mean and median steps per day
+
+We compute the mean and median steps for data portrayed in the histogram using the `summary` function, which gives a bit more information than `mean` and `median`.  The median and mean are quite close, indicating a fairly symmetrical distribution.
+
+```{r collapse=TRUE}
+summary(stepsbydt_na$StepsPerDay, na.rm = FALSE)
+```
+\
+
+
+#### 4. Time series plot of average number of steps
+
+We use `dplyr` to group by interval, then average steps across all days for each interval. Here, we set `na.rm = TRUE` to eliminate `NA` results. We also normalize the "steps" value as average steps per minute by dividing by 5.
+```{r}
+stepsbyint <- activity %>% group_by(interval) %>% summarize(StepsPerMin =
+                                       mean(steps, na.rm = TRUE)/5)
+```
+To make the plot as a funciton of time of day using `ggplot`, we use the interval information to generate times of class `POSIXct`. To do so, we need to reformat the interval information, which is read in as an integer that represents 24-hour clock time, not number of minutes. Note the break between 55 and 10:
+```{r collapse=TRUE}
+stepsbyint$interval[9:15]
+```
+The first step of our reformatting will convert these integers to character clock times.  To do that, we create a reformatting function and vectorize it so that we can pass it to `transmute`.
+```{r}
+# definition of function to change interval into a character time of day
+mktime <- function(tm) {
+        digit4_tm <- paste0(paste0(rep("0", 4 - nchar(tm)), collapse = ""),
+                            tm, collapse = "")
+        digit4_tm <- paste0(substr(digit4_tm, start = 1, stop = 2), ":",
+                            substr(digit4_tm, start = 3, stop = 4))
+}
+#Vectorize fn and use in transmute
+vtime <- Vectorize(mktime, SIMPLIFY = TRUE, USE.NAMES = FALSE)
+stepsbyintchar <- stepsbyint %>% transmute(time = vtime(interval), StepsPerMin)
+```
+Now the intervals are expressed as standard 24-hr clock times:
+```{r collapse=TRUE}
+head(stepsbyintchar)
+```
+Next, we convert to POSIXct and create the plots (one for display, one for safe-keeping):
+```{r cache=TRUE, results ='hide'}
+# convert character time to actual dttm (POSIXct) value
+stepsbyinttm <- stepsbyintchar %>% transmute(time = as.POSIXct(time, format = "%H:%M"),
+                                              StepsPerMin)
+# plot average number of steps taken over course of day, with time shown in clock hours
+(stepTimeSeriesAvg <- ggplot(stepsbyinttm, aes(x = time, y = 5*StepsPerMin)) + geom_line() +
+        scale_x_datetime(date_labels = "%I %p") + labs(x = "Time of Day",
+        y = "Average Steps Per 5-Min Interval", 
+        title = "Average steps per 5-min interval throughout day"))
+png("figures/stepTimeSeriesAvg.png", width = 1000)
+print(stepTimeSeriesAvg)
+dev.off()
+```
+\
+
+
+#### 5. The 5-minute interval that, on average, contains the maximum number of steps
+```{r collapse=TRUE}
+(time_maxsteps <- stepsbyintchar[which.max(stepsbyintchar$StepsPerMin),])
+```
+The time is at `time_maxsteps` on the 24-hour clock.
+\
+
+
+#### 6. Impute missing data
+
+```{r collapse = TRUE}
+## Total number of missing values in original data set
+summary(activity$steps, na.rm = FALSE)
+# Note that this is exactly equal to 8 days of missing data
+sum(is.na(activity$steps))/(12*24) # dividing by 24 hours worth of 12 intervals per hour
+# The missing data is from the following 8 dates
+with(activity, unique(date[is.na(steps)]))
+```
+
+Create new dataset with missing values filled in.  Though we know the exact location of all the NAs, we use a general procedure to replace them in the original data
+```{r collapse=TRUE}
+# create vector of intervals needing imputation
+NAintervals <- activity[is.na(activity$steps), "interval"]
+# Create vector of indices (in the mean steps per interval dataframe)
+# of the intervals needing imputation (i.e., which contain NA values).  
+# There will be one value indexing the position of the interval associated with each NA.
+# The length of the vector will be the number of NAs in the dataset.
+NAindices <- match(NAintervals, stepsbyint$interval)
+length(NAindices)
+
+# Use the index values in 'NAindices' to replace the NA values in the orginal data-set
+# with those in the mean step per interval dataframe. Multiply by 5, since we normalized
+# the interval data in 'stepsbyint' to a value in average steps per minute.
+activityimp <- activity
+activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
+```
+
+
+
+
+
+
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
