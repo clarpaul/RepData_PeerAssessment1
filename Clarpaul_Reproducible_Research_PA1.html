@@ -133,9 +133,8 @@ $(document).ready(function () {
 <li>Understand the impact of imputing missing values</li>
 <li>Evaluate the differences between step profiles on weekdays vs. weekends</li>
 </ul>
-<p>This document is structured so as to demonstrate fulfillment, in order, of the 9 requirements for a successful submission. These are listed in the the section titled <em><strong>Commit containing full submission</strong></em> within the assignment <em><strong>Review Criteria</strong></em>.<br />
-<br />
-</p>
+<p>This document is structured so as to demonstrate fulfillment, in order, of the 9 requirements for a successful submission. These are listed in the the section titled <em><strong>Commit containing full submission</strong></em> within the assignment <em><strong>Review Criteria</strong></em>.</p>
+<hr />
 <div id="set-up-environment-and-read-data" class="section level4">
 <h4>1. Set up environment and read data</h4>
 <p>Before starting, we must set up our environment and read the data.</p>
@@ -150,8 +149,7 @@ conxn &lt;- unz(&quot;activity.zip&quot;,&quot;activity.csv&quot;)
 activity &lt;- read.csv(conxn, colClasses = c(&quot;integer&quot;, &quot;character&quot;, &quot;integer&quot;))
 # `read.csv` closes the conxn, but we also remove it from our environment.
 rm(conxn)</code></pre>
-<p><br />
-</p>
+<hr />
 </div>
 <div id="histogram-of-number-of-steps-taken-per-day" class="section level4">
 <h4>2. Histogram of number of steps taken per day</h4>
@@ -172,8 +170,7 @@ stepsbydt_na &lt;- activity %&gt;% group_by(date) %&gt;% summarize(StepsPerDay =
 png(&quot;figures/histNoNA.png&quot;, width = 1000)
 print(histNoNA)
 dev.off()</code></pre>
-<p><br />
-</p>
+<hr />
 </div>
 <div id="mean-and-median-steps-per-day" class="section level4">
 <h4>3. Mean and median steps per day</h4>
@@ -181,14 +178,13 @@ dev.off()</code></pre>
 <pre class="r"><code>summary(stepsbydt_na$StepsPerDay, na.rm = TRUE)</code></pre>
 <pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 ##      41    8841   10760   10770   13290   21190       8</code></pre>
-<p><br />
-</p>
+<hr />
 </div>
 <div id="time-series-plot-of-average-number-of-steps" class="section level4">
 <h4>4. Time series plot of average number of steps</h4>
 <p>We use <code>dplyr</code> to group by interval, then average steps across all days for each interval. Here, we set <code>na.rm = TRUE</code> to eliminate <code>NA</code> results. We also normalize the “steps” value as average steps per minute by dividing by 5.</p>
 <pre class="r"><code>stepsbyint &lt;- activity %&gt;% group_by(interval) %&gt;% summarize(StepsPerMin = mean(steps, na.rm = TRUE)/5)</code></pre>
-<p>To make the plot as a function of time of day using <code>ggplot</code>, we use the interval information to generate times of class <code>POSIXct</code>. To do so, we need to reformat the interval information, which is read in as an integer that represents 24-hour clock time, not number of minutes. Note the break between 55 and 10, indicative of clock time:</p>
+<p>To make the plot as a function of time of day using <code>ggplot</code>, we use the interval information to generate times of class <code>POSIXct</code>. To do so, we need to reformat the interval information, which is read in as an integer that represents 24-hour clock time, not number of minutes. Note the break between 55 and 100, indicative of clock time (0:55 and 1:00):</p>
 <pre class="r"><code>stepsbyint$interval[9:15]
 ## [1]  40  45  50  55 100 105 110</code></pre>
 <p>The first step of our reformatting will convert these integers to character clock times. To do that, we create a reformatting function and vectorize it so that we can pass it to <code>transmute</code>.</p>
@@ -225,8 +221,7 @@ stepsbyinttm &lt;- stepsbyintchar %&gt;% transmute(plottime = as.POSIXct(plottim
 png(&quot;figures/stepTimeSeriesAvg.png&quot;, width = 1000)
 print(stepTimeSeriesAvg)
 dev.off()</code></pre>
-<p><br />
-</p>
+<hr />
 </div>
 <div id="the-5-minute-interval-that-contains-the-maximum-average-number-of-steps" class="section level4">
 <h4>5. The 5-minute interval that contains the maximum average number of steps</h4>
@@ -235,9 +230,8 @@ dev.off()</code></pre>
 ##    time StepsPerMin         plottime
 ##   &lt;chr&gt;       &lt;dbl&gt;            &lt;chr&gt;
 ## 1 08:35    41.23396 2012-10-01 08:35</code></pre>
-<p>The time is at 08:35 on the 24-hour clock.<br />
-<br />
-</p>
+<p>The time is at 08:35 on the 24-hour clock.</p>
+<hr />
 </div>
 <div id="impute-missing-data" class="section level4">
 <h4>6. Impute missing data</h4>
@@ -252,7 +246,14 @@ dev.off()</code></pre>
 <pre class="r"><code>with(activity, unique(date[is.na(steps)]))
 ## [1] &quot;2012-10-01&quot; &quot;2012-10-08&quot; &quot;2012-11-01&quot; &quot;2012-11-04&quot; &quot;2012-11-09&quot;
 ## [6] &quot;2012-11-10&quot; &quot;2012-11-14&quot; &quot;2012-11-30&quot;</code></pre>
-<p>We now create new dataset with these missing values filled in. Since we know the exact location of all the <code>NA</code>s, we could replace the values rather simply. Instead, we use a more general procedure: we first create a vector of the interval values for each <code>NA</code>, then use this to ‘look up’ the average value across all days in the <code>stepsbyint</code> dataframe:</p>
+<p>We now create a new dataset with these missing values filled in. We proceed by replacing each missing value with the value for the associated 5-minute interval computed by averaging across all days. Since we know the exact location of all the <code>NA</code>s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:</p>
+<ol style="list-style-type: decimal">
+<li>Use <code>is.na()</code> to create a vector of 2304 interval values associated with each of the NAs.<br />
+</li>
+<li>Use <code>match()</code> to match those interval values to those in the dataframe of average steps vs. interval. This generates a vector of indices (row numbers) for those intervals in the average steps dataframe.<br />
+</li>
+<li>Use the indices to ‘look up’ the correct average value for the interval associated with each <code>NA</code> and, using <code>is.na()</code> again, replace it in the original data set.</li>
+</ol>
 <pre class="r"><code># Create vector of interval values needing imputation
 NAintervals &lt;- activity[is.na(activity$steps), &quot;interval&quot;]
 # Construct vector containing the corresponding indices in the `stepsbyint` dataframe
@@ -262,11 +263,10 @@ NAindices &lt;- match(NAintervals, stepsbyint$interval) # Vector of length = num
 # the interval data in 'stepsbyint' to a value in average steps per minute).
 activityimp &lt;- activity
 activityimp$steps[is.na(activity$steps)] &lt;- 5*(stepsbyint$StepsPerMin[NAindices])</code></pre>
-<p><br />
-</p>
+<hr />
 </div>
-<div id="make-histogram-of-steps-per-day-after-imputation-reporting-on-changes-in-mean-and-median" class="section level4">
-<h4>7. Make histogram of steps per day after imputation, reporting on changes in mean and median</h4>
+<div id="make-a-histogram-of-steps-per-day-after-imputing-nas-reporting-on-changes-in-mean-and-median" class="section level4">
+<h4>7. Make a histogram of steps-per-day after imputing NAs, reporting on changes in mean and median</h4>
 <p>As in section (2), we group our data by date and sum over steps. Since there are now no <code>NA</code>s, we let <code>na.rm = FALSE</code> in <code>sum()</code>, so that a warning is generated in the event we have missed any.</p>
 <pre class="r"><code>stepsbydtimp &lt;- activityimp %&gt;% group_by(date) %&gt;% summarize(StepsPerDay = sum(steps, na.rm = FALSE))</code></pre>
 <p>The new mean and median number of steps taken each day:</p>
@@ -278,7 +278,7 @@ activityimp$steps[is.na(activity$steps)] &lt;- 5*(stepsbyint$StepsPerMin[NAindic
 ## [1] 0
 median(stepsbydtimp$StepsPerDay) - median(stepsbydt_na$StepsPerDay, na.rm = TRUE)
 ## [1] 1.188679</code></pre>
-<p>By adding the imputed values, the mean did not change at all. This is to be expected, since all 8 days with <code>NA</code> values had imputed means equal to the population mean prior to imputing NAs. However, the median Steps Per Day moves up slightly, since the original mean, 10766, is slightly higher than the original median, 10765.</p>
+<p>By adding the imputed values, the mean did not change at all. This is to be expected, since all 8 days with <code>NA</code> values had imputed means equal to the population mean prior to imputing NAs. However, the median Steps Per Day moves up slightly, since the original mean, 10766, is slightly higher than the original median, 10765. (Note: there is a disparity between the mean as reported via the <code>mean()</code> function, in this paragraph, and that reported by the <code>summary()</code> function, above. We have run various experiments to see what might be causing this difference, but have not yet reached a conclusion.)</p>
 <p>We can see the precise change to the distribution most clearly if we do a 2-panel plot, juxtaposing histograms before and after imputing <code>NA</code> values. To do this, we first compute a factor variable that will be used to differentiate the two histograms in <code>ggplot</code>, then combine the two dataframes (with and without imputed data), then call <code>ggplot</code>. This time, <code>ggplot()</code> warns us again, as last time, that there are 8 missing values (days) in the pre-imputed data set.</p>
 <pre class="r"><code># Create factor variable
 NA_Treatment &lt;- as.factor(c(rep(&quot;NAs Excluded&quot;, nrow(stepsbydt_na)), rep(&quot;NAs Imputed&quot;, nrow(stepsbydtimp))))
@@ -301,8 +301,7 @@ png(&quot;figures/histPanelNAimputed.png&quot;)
 print(histPanelNAimputed)
 ## Warning: Removed 8 rows containing non-finite values (stat_bin).
 dev.off()</code></pre>
-<p><br />
-</p>
+<hr />
 </div>
 <div id="panel-plot-comparing-average-number-of-steps-per-interval-across-weekdays-and-weekends" class="section level4">
 <h4>8. Panel plot comparing average number of steps per interval across weekdays and weekends</h4>
@@ -339,12 +338,13 @@ stepsbytmdytype &lt;- stepsbyintchardytype %&gt;% as.data.frame %&gt;% transmute
 png(&quot;figures/stepTimeSeriesPanel.png&quot;, width = 800)
 print(stepTimeSeriesPanel)
 dev.off()</code></pre>
-<p>By eye-balling the charts, one can see that on weekends (as compared to weekdays) our walker is slower reaching maximum speed, has a lower maximum speed, and is active later in the day (the distribution of steps has its final local maximum around 8 PM or so on weekends vs. 7 PM on weekdays).<br />
- </p>
+<p>By eye-balling the charts, one can see that on weekends (as compared to weekdays) our walker is slower reaching maximum speed, has a lower maximum speed, and is active later in the day (the distribution of steps has its final local maximum around 8 PM or so on weekends vs. 7 PM on weekdays).</p>
+<hr />
 </div>
 <div id="all-code-used-in-analysis" class="section level4">
 <h4>9. All code used in analysis</h4>
-<p>All code used in this analyis is visible in this woven result.</p>
+<p>All code used in this analyis is visible in this document.</p>
+<hr />
 </div>
 </div>
 <div id="appendix-session-info-for-reproducibility-of-results" class="section level3">

@@ -13,6 +13,7 @@ device. The data was collected from an anonymous individual during October and N
 
 This document is structured so as to demonstrate fulfillment, in order, of the 9 requirements for a successful submission.  These are listed in the the section titled _**Commit containing full submission**_ within the assignment _**Review Criteria**_.    
 
+***
 
 
 #### 1. Set up environment and read data
@@ -36,7 +37,7 @@ activity <- read.csv(conxn, colClasses = c("integer", "character", "integer"))
 # `read.csv` closes the conxn, but we also remove it from our environment.
 rm(conxn)
 ```
-
+***
 
 
 #### 2. Histogram of number of steps taken per day
@@ -74,7 +75,7 @@ png("figures/histNoNA.png", width = 1000)
 print(histNoNA)
 dev.off()
 ```
-
+***
 
 
 #### 3. Mean and median steps per day
@@ -90,7 +91,7 @@ summary(stepsbydt_na$StepsPerDay, na.rm = TRUE)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 ##      41    8841   10760   10770   13290   21190       8
 ```
-
+***
 
 
 #### 4. Time series plot of average number of steps
@@ -100,7 +101,7 @@ We use `dplyr` to group by interval, then average steps across all days for each
 ```r
 stepsbyint <- activity %>% group_by(interval) %>% summarize(StepsPerMin = mean(steps, na.rm = TRUE)/5)
 ```
-To make the plot as a function of time of day using `ggplot`, we use the interval information to generate times of class `POSIXct`. To do so, we need to reformat the interval information, which is read in as an integer that represents 24-hour clock time, not number of minutes. Note the break between 55 and 10, indicative of clock time:
+To make the plot as a function of time of day using `ggplot`, we use the interval information to generate times of class `POSIXct`. To do so, we need to reformat the interval information, which is read in as an integer that represents 24-hour clock time, not number of minutes. Note the break between 55 and 100, indicative of clock time (0:55 and 1:00):
 
 ```r
 stepsbyint$interval[9:15]
@@ -153,7 +154,7 @@ png("figures/stepTimeSeriesAvg.png", width = 1000)
 print(stepTimeSeriesAvg)
 dev.off()
 ```
-
+***
 
 
 #### 5. The 5-minute interval that contains the maximum average number of steps
@@ -170,6 +171,7 @@ dev.off()
 ```
 The time is at 08:35 on the 24-hour clock.  
 
+***
 
 
 #### 6. Impute missing data
@@ -198,7 +200,11 @@ with(activity, unique(date[is.na(steps)]))
 ## [6] "2012-11-10" "2012-11-14" "2012-11-30"
 ```
 
-We now create new dataset with these missing values filled in.  Since we know the exact location of all the `NA`s, we could replace the values rather simply.  Instead, we use a more general procedure: we first create a vector of the interval values for each `NA`, then use this to 'look up' the average value across all days in the `stepsbyint` dataframe:
+We now create a new dataset with these missing values filled in. We proceed by replacing each missing value with the value for the associated 5-minute interval computed by averaging across all days.  Since we know the exact location of all the `NA`s, we could replace the values rather simply.  Instead, we use a more general procedure by following these steps:  
+
+  1.  Use `is.na()` to create a vector of 2304 interval values associated with each of the NAs.  
+  2.  Use `match()` to match those interval values to those in the dataframe of average steps vs. interval. This generates a vector of indices (row numbers) for those intervals in the average steps dataframe.  
+  3.  Use the indices to 'look up' the correct average value for the interval associated with each `NA` and, using `is.na()` again, replace it in the original data set.
 
 ```r
 # Create vector of interval values needing imputation
@@ -211,10 +217,10 @@ NAindices <- match(NAintervals, stepsbyint$interval) # Vector of length = number
 activityimp <- activity
 activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
 ```
+***
 
 
-
-#### 7. Make histogram of steps per day after imputation, reporting on changes in mean and median
+#### 7. Make a histogram of steps-per-day after imputing NAs, reporting on changes in mean and median
 
 As in section (2), we group our data by date and sum over steps. Since there are now no `NA`s, we let `na.rm = FALSE` in `sum()`, so that a warning is generated in the event we have missed any.
 
@@ -241,7 +247,7 @@ median(stepsbydtimp$StepsPerDay) - median(stepsbydt_na$StepsPerDay, na.rm = TRUE
 ## [1] 1.188679
 ```
 By adding the imputed values, the mean did not change at all.  This is to be expected, since
-all 8 days with `NA` values had imputed means equal to the population mean prior to imputing NAs.  However, the median Steps Per Day moves up slightly, since the original mean, 10766, is slightly higher than the original median, 10765.  
+all 8 days with `NA` values had imputed means equal to the population mean prior to imputing NAs.  However, the median Steps Per Day moves up slightly, since the original mean, 10766, is slightly higher than the original median, 10765. (Note: there is a disparity between the mean as reported via the `mean()` function, in this paragraph, and that reported by the `summary()` function, above.  We have run various experiments to see what might be causing this difference, but have not yet reached a conclusion.) 
 
 We can see the precise change to the distribution most clearly if we do a 2-panel plot, juxtaposing histograms before and after imputing `NA` values.  To do this, we first compute a factor variable that will be used to differentiate the two histograms in `ggplot`, then combine the two dataframes (with and without imputed data), then call `ggplot`.  This time, `ggplot()` warns us again, as last time, that there are 8 missing values (days) in the pre-imputed data set.
 
@@ -275,7 +281,7 @@ print(histPanelNAimputed)
 ## Warning: Removed 8 rows containing non-finite values (stat_bin).
 dev.off()
 ```
-
+***
 
 
 #### 8.  Panel plot comparing average number of steps per interval across weekdays and weekends
@@ -325,13 +331,15 @@ dev.off()
 ```
 By eye-balling the charts, one can see that on weekends (as compared to weekdays) our walker
 is slower reaching maximum speed, has a lower maximum speed, and is active later in the day (the distribution of steps has its final local maximum around 8 PM or so on weekends vs. 7 PM on weekdays).  
-  
+
+***
 
 
 #### 9. All code used in analysis
 
-All code used in this analyis is visible in this woven result.
+All code used in this analyis is visible in this document.  
 
+***
 
 ### Appendix: Session Info for Reproducibility of Results
 
