@@ -12,7 +12,7 @@ device. The data was collected from an anonymous individual during October and N
  * Evaluate the differences between step profiles on weekdays vs. weekends
 
 This document is structured so as to demonstrate fulfillment, in order, of the 9 requirements for a successful submission.  These are listed in the the section titled _**Commit containing full submission**_ within the assignment _**Review Criteria**_.    
-\
+
 
 
 #### 1. Set up environment and read data
@@ -36,7 +36,7 @@ activity <- read.csv(conxn, colClasses = c("integer", "character", "integer"))
 # `read.csv` closes the conxn, but we also remove it from our environment.
 rm(conxn)
 ```
-\
+
 
 
 #### 2. Histogram of number of steps taken per day
@@ -74,7 +74,7 @@ png("figures/histNoNA.png", width = 1000)
 print(histNoNA)
 dev.off()
 ```
-\
+
 
 
 #### 3. Mean and median steps per day
@@ -90,7 +90,7 @@ summary(stepsbydt_na$StepsPerDay, na.rm = TRUE)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 ##      41    8841   10760   10770   13290   21190       8
 ```
-\
+
 
 
 #### 4. Time series plot of average number of steps
@@ -153,7 +153,7 @@ png("figures/stepTimeSeriesAvg.png", width = 1000)
 print(stepTimeSeriesAvg)
 dev.off()
 ```
-\
+
 
 
 #### 5. The 5-minute interval that contains the maximum average number of steps
@@ -169,7 +169,7 @@ dev.off()
 ## 1 08:35    41.23396 2012-10-01 08:35
 ```
 The time is at 08:35 on the 24-hour clock.  
-\
+
 
 
 #### 6. Impute missing data
@@ -211,7 +211,7 @@ NAindices <- match(NAintervals, stepsbyint$interval) # Vector of length = number
 activityimp <- activity
 activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
 ```
-\
+
 
 
 #### 7. Make histogram of steps per day after imputation, reporting on changes in mean and median
@@ -275,7 +275,7 @@ print(histPanelNAimputed)
 ## Warning: Removed 8 rows containing non-finite values (stat_bin).
 dev.off()
 ```
-\
+
 
 
 #### 8.  Panel plot comparing average number of steps per interval across weekdays and weekends
@@ -325,7 +325,7 @@ dev.off()
 ```
 By eye-balling the charts, one can see that on weekends (as compared to weekdays) our walker
 is slower reaching maximum speed, has a lower maximum speed, and is active later in the day (the distribution of steps has its final local maximum around 8 PM or so on weekends vs. 7 PM on weekdays).  
-\  
+  
 
 
 #### 9. All code used in analysis
