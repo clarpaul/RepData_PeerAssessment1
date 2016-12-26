@@ -1,3 +1,11 @@
+# _**Note**_
+
+##### _For completed assignment, see files named `Clarpaul_Reproducible_Research_PA1.*` in this repository._  
+
+##### _Thank you!_
+##### _Paul_  
+
+
 ## Introduction
 
 It is now possible to collect a large amount of data about personal

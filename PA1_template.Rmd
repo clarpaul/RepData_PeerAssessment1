@@ -1,25 +1,10 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
+title: "Reproducible Research: Peer Assessment 1 Template"
 output: 
-  html_document:
-    keep_md: true
+  html_document
 ---
 
+Note: For completed assignment, please see files named `Clarpaul_Reproducible_Research_PA1.*`  
 
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
+Thank you!
+Paul
