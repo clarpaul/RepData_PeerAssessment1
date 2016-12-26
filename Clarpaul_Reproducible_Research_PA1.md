@@ -16,13 +16,13 @@ This document is structured so as to demonstrate fulfillment, in order, of the 9
 ***
 
 
-#### 1. Set up environment and read data
+#### 1. Load packages and read data
 
-Before starting, we must set up our environment and read the data.
+Before starting, we load required packages and read the data.
 
 
 ```r
-# Set up our environment and directory structure
+# Load required packages
 if (!require(dplyr)) {install.packages("dplyr")}
 if (!require(ggplot2)) {install.packages("ggplot2")}
 # Create directory for figures
