@@ -5,14 +5,14 @@ December 25, 2016
 
 -   [Introduction](#introduction)
     -   [1. Load packages and read data](#load-packages-and-read-data)
-    -   [2. Histogram of number of steps taken per day](#histogram-of-number-of-steps-taken-per-day)
-    -   [3. Mean and median steps per day](#mean-and-median-steps-per-day)
-    -   [4. Time series plot of average number of steps](#time-series-plot-of-average-number-of-steps)
-    -   [5. The 5-minute interval with maximum average steps](#the-5-minute-interval-with-maximum-average-steps)
+    -   [2. Plot histogram of number of steps taken per day](#plot-histogram-of-number-of-steps-taken-per-day)
+    -   [3. Display mean and median steps per day](#display-mean-and-median-steps-per-day)
+    -   [4. Plot time series of average steps per interval](#plot-time-series-of-average-steps-per-interval)
+    -   [5. Report the 5-minute interval with maximum average steps](#report-the-5-minute-interval-with-maximum-average-steps)
     -   [6. Impute missing data](#impute-missing-data)
-    -   [7. Make a histogram of steps-per-day after imputing NAs, reporting on changes in mean and median](#make-a-histogram-of-steps-per-day-after-imputing-nas-reporting-on-changes-in-mean-and-median)
-    -   [8. Panel plot comparing average number of steps per interval across weekdays and weekends](#panel-plot-comparing-average-number-of-steps-per-interval-across-weekdays-and-weekends)
-    -   [9. All code used in analysis](#all-code-used-in-analysis)
+    -   [7. Evaluate distribution of Steps Per Day with imputed data](#evaluate-distribution-of-steps-per-day-with-imputed-data)
+    -   [8. Compare average time series of weekday and weekend steps per interval](#compare-average-time-series-of-weekday-and-weekend-steps-per-interval)
+    -   [9. Confirm visibility of all code used](#confirm-visibility-of-all-code-used)
 -   [Appendix: Session Info for Reproducibility of Results](#appendix-session-info-for-reproducibility-of-results)
 
 ### Introduction
@@ -33,9 +33,11 @@ This document is structured so as to demonstrate fulfillment, in order, of the 9
 Before starting, we load required packages and read the data. We also create a directory for permanent storage of the figures that will be created.
 
 ``` r
+# set CRAN mirror for package installation
+mir <- "https://cloud.r-project.org"
 # Load required packages
-if (!require(dplyr)) {install.packages("dplyr")}
-if (!require(ggplot2)) {install.packages("ggplot2")}
+if (!require(dplyr)) {install.packages("dplyr", repos = mir); require(dplyr)}
+if (!require(ggplot2)) {install.packages("ggplot2", repos = mir); require(ggplot2)}
 ```
 
 ``` r
@@ -54,7 +56,7 @@ if (!file.exists("figures")) {dir.create("figures")}
 
 ------------------------------------------------------------------------
 
-#### 2. Histogram of number of steps taken per day
+#### 2. Plot histogram of number of steps taken per day
 
 To obtain the histogram, we first group the `activity` data frame by date, and sum over the steps taken on each date. (Note: In doing so, it is important to set `na.rm = FALSE` in `sum`, as we have found that otherwise, `dplyr::summarize` will include zeroes for dates with `NA`s. We want these dates to be properly identified as containing missing data, so they can be omitted from subsequent calculation.)
 
@@ -63,7 +65,7 @@ To obtain the histogram, we first group the `activity` data frame by date, and s
 stepsbydt_na <- activity %>% group_by(date) %>% summarize(StepsPerDay = sum(steps, na.rm = FALSE))
 ```
 
-We then plot the desired histogram using `ggplot`, and save it in the figures directory. We set `na.rm = FALSE`, so that explicit warning messages are generated to confirm the number of days for which the data contains `NA`s.
+We then plot the desired histogram using `ggplot2::ggplot`, and save it in the figures directory. We set `na.rm = FALSE`, so that explicit warning messages are generated to confirm the number of days for which the data contains `NA`s.
 
 ``` r
 # Plotting the histogram
@@ -77,7 +79,7 @@ We then plot the desired histogram using `ggplot`, and save it in the figures di
 
     ## Warning: Removed 8 rows containing non-finite values (stat_bin).
 
-![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/unnamed-chunk-5-1.png)
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/histNoNA-1.png)
 
 ``` r
 # Saving the histogram as a separate file
@@ -88,35 +90,35 @@ dev.off()
 
 ------------------------------------------------------------------------
 
-#### 3. Mean and median steps per day
+#### 3. Display mean and median steps per day
 
 We now compute the mean and median steps for the data in the above histogram. We use the `summary` function for this, as it gives a bit more information than `mean` and `median`. The median 10765 and mean 10766.19 are quite close, consistent with a fairly symmetrical distribution.
 
 ``` r
-summary(stepsbydt_na$StepsPerDay, digits = 7, na.rm = TRUE)
+print(format(summary(stepsbydt_na$StepsPerDay, digits = 7, na.rm = TRUE), big.mark = ","), quote = FALSE)
 ```
 
-    ##     Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's 
-    ##    41.00  8841.00 10765.00 10766.19 13294.00 21194.00        8
+    ##      Min.   1st Qu.    Median      Mean   3rd Qu.      Max.      NA's 
+    ##     41.00  8,841.00 10,765.00 10,766.19 13,294.00 21,194.00         8
 
 ------------------------------------------------------------------------
 
-#### 4. Time series plot of average number of steps
+#### 4. Plot time series of average steps per interval
 
-We use `dplyr` to group by interval, then average steps across all days for each interval. Here, we set `na.rm = TRUE` to eliminate `NA` results. (Unless we do this, our `mean` for every interval will be `NA`: as we will see in section (6), some days are 100% `NA`.) We also normalize the "steps" value as average steps per minute by dividing by 5.
+We use `dplyr::group_by` to group by interval, then `dplyr::summarize` to average steps across all days for each interval. Here, we set `na.rm = TRUE` to eliminate `NA` results. (Unless we do this, our `mean` for every interval will be `NA`: as we will see in section (6), for some days, all intervals are `NA`.) To make it easier to check the results vs. experience, we also normalize the `steps` variable to average `StepsPerMin`, dividing by 5.
 
 ``` r
 stepsbyint <- activity %>% group_by(interval) %>% summarize(StepsPerMin = mean(steps, na.rm = TRUE)/5)
 ```
 
-To plot times in 'clock' format, `ggplot2` functions require time variables to be of class `POSIXct`. Therefore, we need to reformat the interval information. This is not hard, because we have read it in as an integer representing 24-hour clock time, not number of minutes. Note the break between 55 and 100, indicative of clock time (i.e., 0:55 and 1:00).
+To plot times in 'clock' format, `ggplot2` functions require time variables to be of class `POSIXct`. Therefore, we need to reformat the interval information. This is not hard, because we have read it in as an integer representing 24-hour clock time, not number of minutes. Note the break between 55 and 100, indicative of clock time (i.e., 55 and 100 represent 0:55 and 1:00).
 
 ``` r
 stepsbyint$interval[9:15]
 ## [1]  40  45  50  55 100 105 110
 ```
 
-As preparation for conversion to `POSIXct`, we first change the integers to clock times in *character* format. For that, we create a reformatting function and vectorize it so that it can be passed to `transmute`.
+As preparation for conversion to `POSIXct`, we first change the integers to clock times in *character* format. For that, we create a reformatting function and vectorize it so that it can be passed to `dplyr::transmute`.
 
 ``` r
 # Definition of function to change interval into a character time of day
@@ -132,17 +134,16 @@ stepsbyintchar <- stepsbyint %>% transmute(time = vtime(interval), StepsPerMin)
 Now the intervals are expressed as standard 24-hr clock times:
 
 ``` r
-head(stepsbyintchar)
-## # A tibble: 6 × 2
-##    time StepsPerMin
-##   <chr>       <dbl>
-## 1 00:00  0.34339623
-## 2 00:05  0.06792453
-## 3 00:10  0.02641509
-## 4 00:15  0.03018868
-## 5 00:20  0.01509434
-## 6 00:25  0.41886792
+format(head(stepsbyintchar), digits = 2)
 ```
+
+    ##    time StepsPerMin
+    ## 1 00:00       0.343
+    ## 2 00:05       0.068
+    ## 3 00:10       0.026
+    ## 4 00:15       0.030
+    ## 5 00:20       0.015
+    ## 6 00:25       0.419
 
 Next, we convert to `POSIXct` and create the plots (one for display, one for safe-keeping). Note that `POSIXct` times must include a date. However, the date is of no consequence for this plot (so long as we do not use a day with changes to/from Daylight Savings Time). Therefore we prepare the variable `plottime` from `time` by appending the first date of the period in question, on which we know no conversion to/from DST occurs:
 
@@ -157,7 +158,7 @@ stepsbyinttm <- stepsbyintchar %>% transmute(plottime = as.POSIXct(plottime, for
         title = "Average steps per 5-min interval throughout day"))
 ```
 
-![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/unnamed-chunk-12-1.png)
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/stepTimeSeriesAvg-1.png)
 
 ``` r
 # Save time series plot in figures directory
@@ -168,7 +169,7 @@ dev.off()
 
 ------------------------------------------------------------------------
 
-#### 5. The 5-minute interval with maximum average steps
+#### 5. Report the 5-minute interval with maximum average steps
 
 ``` r
 (time_maxsteps <- stepsbyintchar[which.max(stepsbyintchar$StepsPerMin),])
@@ -179,7 +180,7 @@ dev.off()
     ##   <chr>       <dbl>            <chr>
     ## 1 08:35    41.23396 2012-10-01 08:35
 
-The time with maximum steps is 08:35 on the 24-hour clock.
+The time with maximum average steps is 08:35 on the 24-hour clock. During this interval, about 41.2 steps are taken per minute.
 
 ------------------------------------------------------------------------
 
@@ -209,11 +210,11 @@ with(activity, unique(date[is.na(steps)]))
 ## [6] "2012-11-10" "2012-11-14" "2012-11-30"
 ```
 
-We now create a new data set with these missing values filled in. We replace each missing value with the value for the associated 5-minute interval computed by averaging across all days. Since we know the exact locations of all the `NA`s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:
+We now create a new data set `activityimp` by replacing each missing `steps` value in `activity` with the value for the associated 5-minute interval computed by averaging across all days. Since we know the exact locations of all the `NA`s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:
 
-1.  Use `is.na()` on `steps` in the `activity` data frame to extract a vector of 2304 `interval` values associated with the NAs.
-2.  Use `match()` to match those interval values to those in the data frame of average steps vs. interval, and extract the indices in that data frame associated with the matches.
-3.  Use the indices to 'look up' the correct average value for every interval associated with an `NA`. Using `is.na()` again, put them in the right locations in the original data set.
+1.  Use `is.na()` on `steps` in the `activity` data frame, subsetting on `interval`, to extract a vector of 2304 `interval` values associated with the NAs.
+2.  Use `match()` to match the `interval` values to those in the data frame of average steps vs. interval, and extract the indices in that data frame associated with the matches.
+3.  Use the indices to 'look up' the correct average value of `StepsPerMin` for every interval associated with an `NA`. Using `is.na()` again, put them in the right locations in the original data set (multiplied by 5).
 
 ``` r
 # Create vector of interval values needing imputation
@@ -229,24 +230,24 @@ activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices]
 
 ------------------------------------------------------------------------
 
-#### 7. Make a histogram of steps-per-day after imputing NAs, reporting on changes in mean and median
+#### 7. Evaluate distribution of Steps Per Day with imputed data
 
-As in section (2), we group our data by date and sum over steps.
+As in section (2), we group our data by `date` and sum over `steps`.
 
 ``` r
 stepsbydtimp <- activityimp %>% group_by(date) %>% summarize(StepsPerDay = sum(steps, na.rm = FALSE))
 ```
 
-The new mean and median number of steps taken each day:
+The new `mean` and `median` number of steps taken each day:
 
 ``` r
-summary(stepsbydtimp$StepsPerDay, na.rm = FALSE, digits = 7)
+print(format(summary(stepsbydtimp$StepsPerDay, na.rm = FALSE, digits = 7), big.mark = ",", nsmall =2), quote = FALSE)
 ```
 
-    ##     Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
-    ##    41.00  9819.00 10766.19 10766.19 12811.00 21194.00
+    ##      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+    ##     41.00  9,819.00 10,766.19 10,766.19 12,811.00 21,194.00
 
-The difference between `mean` and `median` is now 0, consistent with a distribution even more symmetrical than before. We now calculate the difference between imputed and non-imputed data on `mean` and `median`. We must remove the `NA`s to obtain the `mean` and `median` for the data with `NA`s.
+The difference between `mean` and `median` is now 0, consistent with a distribution even more symmetrical than before. We now calculate the difference between imputed and non-imputed data on `mean` and `median`.
 
 ``` r
 mean(stepsbydtimp$StepsPerDay) - mean(stepsbydt_na$StepsPerDay, na.rm = TRUE)
@@ -255,9 +256,9 @@ round(median(stepsbydtimp$StepsPerDay) - median(stepsbydt_na$StepsPerDay, na.rm 
 ## [1] 1.19
 ```
 
-By adding the imputed values, the mean did not change at all. This is to be expected, since all 8 days with `NA` values had imputed means equal to the population mean prior to imputing `NA`s. However, the median *Steps Per Day* moves up slightly, since the original mean, 10766.19, is slightly higher than the original median, 10765.00.
+By adding the imputed values, the mean did not change at all. This is to be expected, since all 8 days with `NA` values had imputed means equal to the population mean prior to imputing `NA`s. However, the median *Steps Per Day* moves up slightly, since the original `mean`, 10766.19, is slightly higher than the original median, 10765.
 
-We can see the precise change to the distribution most clearly if we do a 2-panel plot, juxtaposing histograms before and after imputing `NA` values. To do this, we first compute a factor variable that will be used to differentiate the two histograms in `ggplot`, then combine the two data frames (with and without imputed data), then call `ggplot`. Again, `ggplot()` warns us that there are 8 missing values (days) in the original data set.
+We can see the precise change to the distribution most clearly if we do a 2-panel plot, juxtaposing histograms before and after imputing `NA` values. To do this, we first compute a factor variable that will be used to differentiate the two histograms in `ggplot`, then combine the two data frames (with and without imputed data), then call `ggplot`.
 
 ``` r
 # Create factor variable
@@ -278,9 +279,9 @@ stepsbydt_impexc$NA_Treatment <- NA_Treatment
 
     ## Warning: Removed 8 rows containing non-finite values (stat_bin).
 
-![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/unnamed-chunk-21-1.png)
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/histPanelNAimputed-1.png)
 
-The 8 imputed days are placed exactly on top of the mean of the distributijon.
+The 8 imputed days are placed exactly on top of the mean of the distribution.
 
 ``` r
 # Save figure to disk, for safe-keeping
@@ -292,11 +293,11 @@ dev.off()
 
 ------------------------------------------------------------------------
 
-#### 8. Panel plot comparing average number of steps per interval across weekdays and weekends
+#### 8. Compare average time series of weekday and weekend steps per interval
 
-Creation of this panel plot is done via a process very similar to that in (4) above. However, we need to take two extra steps to compute separate averages by weekday and weekend day.
+Creation of this panel plot is done via a process very similar to that in (4) above. However, we take two extra steps to compute separate averages by weekday and weekend day.
 
-1.  Convert the character `date` field of our data set to `POSIXct` format, so that we can call `weekdays()` on it
+1.  Convert the character `date` field of our data set to `POSIXct` or `Date` format, so that we can call `weekdays()` on it
 2.  Categorize the days of the week using `ifelse()`
 
 We are then in a position to compute the required averages.
@@ -335,7 +336,7 @@ stepsbytmdytype <- stepsbyintchardytype %>% as.data.frame %>% transmute(plottime
         title = "Average steps per 5-min interval throughout day: Weekdays vs. Weekends"))
 ```
 
-![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/unnamed-chunk-24-1.png)
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/stepTimeSeriesPanel-1.png)
 
 ``` r
 # Save a version of the plot in the figures directory
@@ -348,7 +349,7 @@ By eye-balling the charts, one can see that on weekends (as compared to weekdays
 
 ------------------------------------------------------------------------
 
-#### 9. All code used in analysis
+#### 9. Confirm visibility of all code used
 
 All code used in this analysis is available in this document.
 
@@ -360,7 +361,7 @@ All code used in this analysis is available in this document.
 sessionInfo()
 ```
 
-    ## R version 3.3.1 (2016-06-21)
+    ## R version 3.3.2 (2016-10-31)
     ## Platform: x86_64-w64-mingw32/x64 (64-bit)
     ## Running under: Windows 7 x64 (build 7601) Service Pack 1
     ## 
@@ -378,10 +379,10 @@ sessionInfo()
     ## [1] ggplot2_2.2.0 dplyr_0.5.0  
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Rcpp_0.12.7      digest_0.6.10    rprojroot_1.1    assertthat_0.1  
-    ##  [5] plyr_1.8.4       grid_3.3.1       R6_2.2.0         gtable_0.2.0    
+    ##  [1] Rcpp_0.12.8      digest_0.6.10    rprojroot_1.1    assertthat_0.1  
+    ##  [5] plyr_1.8.4       grid_3.3.2       R6_2.2.0         gtable_0.2.0    
     ##  [9] DBI_0.5-1        backports_1.0.4  magrittr_1.5     scales_0.4.1    
     ## [13] evaluate_0.10    stringi_1.1.2    reshape2_1.4.2   lazyeval_0.2.0  
-    ## [17] rmarkdown_1.3    labeling_0.3     tools_3.3.1      stringr_1.1.0   
-    ## [21] munsell_0.4.3    yaml_2.1.13      colorspace_1.2-7 htmltools_0.3.5 
+    ## [17] rmarkdown_1.3    labeling_0.3     tools_3.3.2      stringr_1.1.0   
+    ## [21] munsell_0.4.3    yaml_2.1.14      colorspace_1.3-2 htmltools_0.3.5 
     ## [25] knitr_1.15.1     tibble_1.2
