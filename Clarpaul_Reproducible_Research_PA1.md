@@ -147,8 +147,7 @@ stepsbyinttm <- stepsbyintchar %>% transmute(plottime = as.POSIXct(plottime, for
 # plot average number of steps taken over course of day, with time shown in clock hours
 (stepTimeSeriesAvg <- ggplot(stepsbyinttm, aes(x = plottime, y = 5*StepsPerMin)) + geom_line() +
         scale_x_datetime(date_labels = "%I %p") + labs(x = "Time of Day",
-        y = "Average Steps Per 5-Min Interval", 
-        title = "Average steps per 5-min interval throughout day"))
+        y = "Average Steps Per 5-Min Interval", title = "Average steps per 5-min interval throughout day"))
 ```
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/stepTimeSeriesAvg-1.png)
@@ -158,15 +157,15 @@ stepsbyinttm <- stepsbyintchar %>% transmute(plottime = as.POSIXct(plottime, for
 #### 5. Report the 5-minute interval with maximum average steps
 
 ``` r
-(time_maxsteps <- stepsbyintchar[which.max(stepsbyintchar$StepsPerMin),])
+(time_maxsteps <- stepsbyintchar[which.max(stepsbyintchar$StepsPerMin), 3:2])
 ```
 
-    ## # A tibble: 1 × 3
-    ##    time StepsPerMin         plottime
-    ##   <chr>       <dbl>            <chr>
-    ## 1 08:35    41.23396 2012-10-01 08:35
+    ## # A tibble: 1 × 2
+    ##           plottime StepsPerMin
+    ##              <chr>       <dbl>
+    ## 1 2012-10-01 08:35    41.23396
 
-The time with maximum average steps is 08:35 on the 24-hour clock. During this interval, about 41.2 steps are taken per minute.
+The `interval` with maximum average steps is NULL. During this `interval`, an average of 41.2 steps are taken per minute.
 
 ------------------------------------------------------------------------
 
@@ -181,10 +180,11 @@ summary(activity$steps, na.rm = FALSE)
     ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
     ##    0.00    0.00    0.00   37.38   12.00  806.00    2304
 
-Note that the number of `NA`s is exactly 8 days of missing data. To show that, we divide the total number of missing values by 24 hours per day and 12 intervals per hour, or 288 intervals per day:
+Note that the number of `NA`s is exactly 8 days of missing data. To show that, we divide the total number of missing values by 24 hours per day and 12 intervals per hour, equal to 288 intervals per day:
 
 ``` r
-(eight <- sum(is.na(activity$steps))/(12*24))
+num_NAs <- sum(is.na(activity$steps))
+(eight <- num_NAs/(12*24))
 ## [1] 8
 ```
 
@@ -196,11 +196,13 @@ with(activity, unique(date[is.na(steps)]))
 ## [6] "2012-11-10" "2012-11-14" "2012-11-30"
 ```
 
-We now create a new data set `activityimp` by replacing each missing `steps` value in `activity` with the value for the associated 5-minute interval computed by averaging across all days. Since we know the exact locations of all the `NA`s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:
+##### 6.1 Imputing missing values: method I
 
-1.  Use `is.na()` on `steps` in the `activity` data frame, subsetting on `interval`, to extract a vector of 2304 `interval` values associated with the NAs.
-2.  Use `match()` to match the `interval` values to those in the data frame of average steps vs. interval, and extract the indices in that data frame associated with the matches.
-3.  Use the indices to 'look up' the correct average value of `StepsPerMin` for every interval associated with an `NA`. Using `is.na()` again, put them in the right locations in the original data set (multiplied by 5).
+We now create a new data set `activityimp` by replacing each missing `steps` value in `activity` with the value for the associated 5-minute interval computed by averaging across all days (we call this the ***Mean Steps by Interval*** method of imputing the data). Since we know the exact locations of all the `NA`s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:
+
+1.  Use `is.na()` in the `activity` data frame to subset it on `steps` values which are `NA`, and select from it the vector of 2,304 associated `interval` values. These 2,304 `interval` values are not unique, as there are only 288 intervals per day.
+2.  `match()` the `interval` values from the `activity` data frame to those in `stepsbyint` (the data frame of average `StepsPerMin` by `interval`), 'looking up' the 2,304 index values associated with the NAs.
+3.  Use the indices to 'look up' the correct average value of `StepsPerMin` for every interval associated with an `NA`. Using `is.na()` again, put the `StepPerMin` (multiplied by 5) in the right locations in the original data set.
 
 ``` r
 # Create vector of interval values needing imputation
@@ -214,134 +216,121 @@ activityimp <- activity
 activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
 ```
 
-We now evaluate a different scheme for replacement of missing values, which involves interpolation via application of a function called `na.approx` in the package `zoo`. We follow the method of user *'rndmacc'* on github [here](https://github.com/rndmacc/RepData_PeerAssessment1/blob/master/PA1_template.md).
+##### 6.2 Imputing missing values: method II
+
+We now evaluate a different scheme for replacement of missing values, which involves interpolation via application of a function called `na.approx()` in the package `zoo`. We follow the method of user ***rndmacc*** on github [here](https://github.com/rndmacc/RepData_PeerAssessment1/blob/master/PA1_template.md). (User ***rndmacc*** is another student in the **Reproducible Research** class.)
 
 ``` r
+# Load/install package
 if (!require(zoo)) {install.packages("zoo"); require(zoo)}
-activityimp_int <- activity
 # rndmacc says boundaries won't be interpolated unless start and end are set to 0
+activityimp_int <- activity
 activityimp_int[1,1] <- 0
 activityimp_int[nrow(activityimp_int),1] <- 0
 activityimp_int$steps <- na.approx(activityimp_int$steps)
 ```
 
-We now compare the results of interpolation to the mean profile imputation.
+We now compare the results of interpolation to the ***Mean Steps by Interval*** imputation.
 
 ``` r
 na_dates <- with(activity, unique(date[is.na(steps)]))
-activityimp$method <- rep("Mean profile", nrow(activityimp))
-activityimp_int$method <- rep("Interpolated", nrow(activityimp_int))
+activityimp$Method <- rep("Mean Steps by Interval", nrow(activityimp))
+activityimp_int$Method <- rep("Interpolation 1", nrow(activityimp_int))
 activityimp_full <- rbind(activityimp, activityimp_int)
 
 activityimp_fullposix <- transmute(activityimp_full, date, plottime =  as.POSIXct(paste("2012-10-01",
-        vtime(interval)), format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, method) 
+        vtime(interval)), format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, Method) 
 
 
-(ggplot(subset(activityimp_fullposix, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = method)) + 
-                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%I") + 
-                labs(x = "Time of Day", y = "Average Steps Per 5-Min Interval", 
-                title = "Imputation method 2: Avg steps per 5-min interval"))
+(ggplot(subset(activityimp_fullposix, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = Method)) + 
+                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%H") + 
+                labs(x = "Time of Day (24 hr format)", y = "Average Steps Per 5-Min Interval", 
+                title = "Imputation method II: Avg steps per 5-min interval"))
 ```
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation2-1.png)
 
-We can see here that *rndmacc's* interpolation scheme fails: because `steps` is close to 0 at the border between days (and NAs occur in blocks that are a single day long) it amounts to setting `steps` at or close to 0 for each block.
+We see here that this interpolation scheme fails: because `steps` is close to 0 at the border between days (and NAs occur only in blocks of one entire date), it amounts to setting `steps` at or close to 0 for each interpolated date.
 
-Better results might be obtained by interpolating across adjacent days. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
+##### 6.3 Imputing missing values: method III
+
+Next we impute missing days by interpolating values from adjacent days. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
 
 ``` r
 if (!require(tidyr)) {install.packages("tidyr"); require(tidyr)}
-head(activity)
-```
-
-    ##   steps       date interval
-    ## 1    NA 2012-10-01        0
-    ## 2    NA 2012-10-01        5
-    ## 3    NA 2012-10-01       10
-    ## 4    NA 2012-10-01       15
-    ## 5    NA 2012-10-01       20
-    ## 6    NA 2012-10-01       25
-
-``` r
+# Note: we turn the matrix into a tbl_df, for better printing; tbl_df is loaded with one of the
+# packages in Hadley's 'tidyverse'
 activity_matrix <- spread(data = activity, key = interval, value = steps) %>% tbl_df
 ```
 
-Note that there is no way to interpolate the first and last dates, as they are at the boundaries of the matrix:
+Note that there is no way to interpolate the first and last dates, as they are at the boundaries of the matrix. (Note that the last date is 2012-11-30.) The other dates are surrounded by non-NA values.
 
 ``` r
-subset(activity_matrix, date %in% na_dates)[,1:10]
+subset(activity_matrix, date %in% na_dates, select = c(1, `830`:`915`))
 ```
 
-    ## # A tibble: 8 × 10
-    ##         date   `0`   `5`  `10`  `15`  `20`  `25`  `30`  `35`  `40`
-    ##        <chr> <int> <int> <int> <int> <int> <int> <int> <int> <int>
-    ## 1 2012-10-01    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 2 2012-10-08    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 3 2012-11-01    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 4 2012-11-04    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 5 2012-11-09    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 6 2012-11-10    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 7 2012-11-14    NA    NA    NA    NA    NA    NA    NA    NA    NA
-    ## 8 2012-11-30    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## # A tibble: 8 × 11
+    ##         date `830` `835` `840` `845` `850` `855` `900` `905` `910` `915`
+    ##        <chr> <int> <int> <int> <int> <int> <int> <int> <int> <int> <int>
+    ## 1 2012-10-01    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 2 2012-10-08    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 3 2012-11-01    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 4 2012-11-04    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 5 2012-11-09    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 6 2012-11-10    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 7 2012-11-14    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 8 2012-11-30    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
 
-But we can interpolate all the other NA rows:
+But we can interpolate all the other NA rows.
 
 ``` r
 activity_matrix_imp <- activity_matrix
 activity_matrix_imp[,-1] <- na.approx(object = activity_matrix[,-1], na.rm = FALSE)
-format(subset(activity_matrix_imp, date %in% na_dates)[,1:10], digits = 3, nsmall = 2)
+def_digits = getOption("digits")
+options(digits = 3)
+subset(activity_matrix_imp, date %in% na_dates, select = c(1, `830`:`915`))
 ```
 
-    ##         date    0    5   10   15   20   25    30   35   40
-    ## 1 2012-10-01   NA   NA   NA   NA   NA   NA    NA   NA   NA
-    ## 2 2012-10-08 0.00 0.00 0.00 0.00 0.00 6.50 14.00 0.00 0.00
-    ## 3 2012-11-01 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
-    ## 4 2012-11-04 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
-    ## 5 2012-11-09 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
-    ## 6 2012-11-10 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
-    ## 7 2012-11-14 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
-    ## 8 2012-11-30   NA   NA   NA   NA   NA   NA    NA   NA   NA
+    ## # A tibble: 8 × 11
+    ##         date `830` `835` `840` `845` `850` `855` `900` `905` `910` `915`
+    ##        <chr> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl>
+    ## 1 2012-10-01    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 2 2012-10-08 364.5 317.5 366.0 306.5 265.0 327.5  78.5   0.0 111.5   172
+    ## 3 2012-11-01 447.0 354.0 188.5  95.0 341.5  32.5   8.0  11.5  21.0   102
+    ## 4 2012-11-04  69.5  65.5  54.5 161.5 318.0 294.0 280.5 537.5 562.5   600
+    ## 5 2012-11-09  24.0   8.0  19.3  21.7  24.3  14.3   0.0   0.0  19.7     0
+    ## 6 2012-11-10  48.0   4.0  38.7  43.3  48.7  28.7   0.0   0.0  39.3     0
+    ## 7 2012-11-14  37.0   8.0   0.0   0.0   0.0   0.0   0.0   8.0  13.5     0
+    ## 8 2012-11-30    NA    NA    NA    NA    NA    NA    NA    NA    NA    NA
 
-To complete the imputation, we now set the first and last rows equal to the column means of the rest of the interpolated matrix.
+``` r
+options(digits = def_digits)
+```
+
+To complete the imputation, in the spirit of interpolation (i.e., making imputed rows depend on *local* data) we now set the first and last rows equal to the second and next-to-last rows.
 
 ``` r
 activity_matrix_imp2 <- activity_matrix_imp
-activity_matrix_imp2[1,-1] <- colMeans(activity_matrix_imp[,-1], na.rm = TRUE)
-activity_matrix_imp2[nrow(activity_matrix_imp),-1] <- colMeans(activity_matrix_imp[,-1], na.rm = TRUE)
-subset(activity_matrix_imp2, date %in% na_dates)[,1:10]
-```
-
-    ## # A tibble: 8 × 10
-    ##         date      `0`       `5`      `10`      `15`       `20`     `25`
-    ##        <chr>    <dbl>     <dbl>     <dbl>     <dbl>      <dbl>    <dbl>
-    ## 1 2012-10-01 1.542373 0.3050847 0.1186441 0.1355932 0.06779661 1.991525
-    ## 2 2012-10-08 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 6.500000
-    ## 3 2012-11-01 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
-    ## 4 2012-11-04 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
-    ## 5 2012-11-09 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
-    ## 6 2012-11-10 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
-    ## 7 2012-11-14 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
-    ## 8 2012-11-30 1.542373 0.3050847 0.1186441 0.1355932 0.06779661 1.991525
-    ## # ... with 3 more variables: `30` <dbl>, `35` <dbl>, `40` <dbl>
-
-``` r
-activityimp_int2 <- gather(data = activity_matrix_imp2, key = interval, value = steps, -1, convert = TRUE)
-activityimp_int2 <- arrange(activityimp_int2, date) %>% select(interval, date, steps)
+activity_matrix_imp2[1,-1] <- activity_matrix_imp[2,-1]
+activity_matrix_imp2[nrow(activity_matrix),-1] <- activity_matrix[nrow(activity_matrix) - 1,-1]
 ```
 
 We now plot the results of this method of interpolation on the 8 interpolated days of data.
 
 ``` r
-activityimp_int2$method <- rep("Interpolated", nrow(activityimp_int2))
+activityimp_int2 <- gather(data = activity_matrix_imp2, key = interval, value = steps, -1, convert = TRUE)
+activityimp_int2 <- arrange(activityimp_int2, date) %>% select(interval, date, steps)
+
+activityimp_int2$Method <- rep("Interpolation 2", nrow(activityimp_int2))
 activityimp_full2 <- rbind(activityimp, activityimp_int2)
 
-activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSIXct(paste("2012-10-01", vtime(interval)), 
-                        format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, method) 
+activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSIXct(paste("2012-10-01", 
+                vtime(interval)), format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, Method) 
 
 
-(ggplot(subset(activityimp_fullposix2, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = method)) + 
-                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%I") + 
-                labs(x = "Time of Day", y = "Average Steps Per 5-Min Interval", 
+(ggplot(subset(activityimp_fullposix2, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = Method)) + 
+                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%H") + 
+                labs(x = "Time of Day (24 hr format)", y = "Average Steps Per 5-Min Interval", 
                 title = "Imputation method 3: Avg steps per 5-min interval"))
 ```
 
@@ -351,7 +340,7 @@ activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSI
 
 #### 7. Evaluate distribution of Steps Per Day with imputed data
 
-Here we utilize the first method of imputing data (the **'Mean profile'** approach). As in section (2), we group our data by `date` and sum over `steps`.
+Here we utilize the first method of imputing data (the ***Mean Steps by Interval*** approach). As in section (2), we group our data by `date` and sum over `steps`.
 
 ``` r
 stepsbydtimp <- activityimp %>% group_by(date) %>% summarize(StepsPerDay = sum(steps, na.rm = FALSE))
