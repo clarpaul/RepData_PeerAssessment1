@@ -159,15 +159,14 @@ stepsbyinttm <- stepsbyintchar %>% transmute(plottime = as.POSIXct(plottime, for
 #### 5. Report the 5-minute interval with maximum average steps
 
 ``` r
-(time_maxsteps <- stepsbyintchar[which.max(stepsbyintchar$StepsPerMin), 3:2])
+time_maxsteps <- stepsbyintchar[which.max(stepsbyintchar$StepsPerMin),]
+print(format(time_maxsteps, digits = 3)[,1:2])
 ```
 
-    ## # A tibble: 1 × 2
-    ##           plottime StepsPerMin
-    ##              <chr>       <dbl>
-    ## 1 2012-10-01 08:35    41.23396
+    ##    time StepsPerMin
+    ## 1 08:35        41.2
 
-The `interval` with maximum average steps is NULL. During this `interval`, an average of 41.2 steps are taken per minute.
+The `interval` with maximum average steps is 08:35 on the 24-hr clock. During this `interval`, an average of 41.2 steps are taken per minute.
 
 ------------------------------------------------------------------------
 
