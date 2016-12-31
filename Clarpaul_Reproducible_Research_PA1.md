@@ -36,8 +36,10 @@ Before starting, we load required packages and read the data. We also create a d
 # set CRAN mirror for package installation
 mir <- "https://cloud.r-project.org"
 # Load required packages
-if (!require(dplyr)) {install.packages("dplyr", repos = mir); require(dplyr)}
-if (!require(ggplot2)) {install.packages("ggplot2", repos = mir); require(ggplot2)}
+if (!require(dplyr)) {install.packages("dplyr", repos = mir); require(dplyr)} # data processing
+if (!require(ggplot2)) {install.packages("ggplot2", repos = mir); require(ggplot2)} # plotting
+if (!require(zoo)) {install.packages("zoo"); require(zoo)} # imputation of missing values
+if (!require(tidyr)) {install.packages("tidyr"); require(tidyr)} # data processing
 ```
 
 ``` r
@@ -191,12 +193,12 @@ num_NAs <- sum(is.na(activity$steps))
 The 8 days in question are the following:
 
 ``` r
-with(activity, unique(date[is.na(steps)]))
+(na_dates <- with(activity, unique(date[is.na(steps)])))
 ## [1] "2012-10-01" "2012-10-08" "2012-11-01" "2012-11-04" "2012-11-09"
 ## [6] "2012-11-10" "2012-11-14" "2012-11-30"
 ```
 
-##### 6.1 Imputing missing values: method I
+##### 6.1 Imputing missing values: Mean Steps by Interval
 
 We now create a new data set `activityimp` by replacing each missing `steps` value in `activity` with the value for the associated 5-minute interval computed by averaging across all days (we call this the ***Mean Steps by Interval*** method of imputing the data). Since we know the exact locations of all the `NA`s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:
 
@@ -216,48 +218,11 @@ activityimp <- activity
 activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
 ```
 
-##### 6.2 Imputing missing values: method II
+##### 6.2 Imputing missing values: Interpolation
 
-We now evaluate a different scheme for replacement of missing values, which involves interpolation via application of a function called `na.approx()` in the package `zoo`. We follow the method of user ***rndmacc*** on github [here](https://github.com/rndmacc/RepData_PeerAssessment1/blob/master/PA1_template.md). (User ***rndmacc*** is another student in the **Reproducible Research** class.)
-
-``` r
-# Load/install package
-if (!require(zoo)) {install.packages("zoo"); require(zoo)}
-# rndmacc says boundaries won't be interpolated unless start and end are set to 0
-activityimp_int <- activity
-activityimp_int[1,1] <- 0
-activityimp_int[nrow(activityimp_int),1] <- 0
-activityimp_int$steps <- na.approx(activityimp_int$steps)
-```
-
-We now compare the results of interpolation to the ***Mean Steps by Interval*** imputation.
+Next we impute missing days by interpolating values from adjacent days. We do this by application of a function called `na.approx()` in the package `zoo`. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
 
 ``` r
-na_dates <- with(activity, unique(date[is.na(steps)]))
-activityimp$Method <- rep("Mean Steps by Interval", nrow(activityimp))
-activityimp_int$Method <- rep("Interpolation 1", nrow(activityimp_int))
-activityimp_full <- rbind(activityimp, activityimp_int)
-
-activityimp_fullposix <- transmute(activityimp_full, date, plottime =  as.POSIXct(paste("2012-10-01",
-        vtime(interval)), format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, Method) 
-
-
-(ggplot(subset(activityimp_fullposix, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = Method)) + 
-                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%H") + 
-                labs(x = "Time of Day (24 hr format)", y = "Average Steps Per 5-Min Interval", 
-                title = "Imputation method II: Avg steps per 5-min interval"))
-```
-
-![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation2-1.png)
-
-We see here that this interpolation scheme fails: because `steps` is close to 0 at the border between days (and NAs occur only in blocks of one entire date), it amounts to setting `steps` at or close to 0 for each interpolated date.
-
-##### 6.3 Imputing missing values: method III
-
-Next we impute missing days by interpolating values from adjacent days. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
-
-``` r
-if (!require(tidyr)) {install.packages("tidyr"); require(tidyr)}
 # Note: we turn the matrix into a tbl_df, for better printing; tbl_df is loaded with one of the
 # packages in Hadley's 'tidyverse'
 activity_matrix <- spread(data = activity, key = interval, value = steps) %>% tbl_df
@@ -321,7 +286,8 @@ We now plot the results of this method of interpolation on the 8 interpolated da
 activityimp_int2 <- gather(data = activity_matrix_imp2, key = interval, value = steps, -1, convert = TRUE)
 activityimp_int2 <- arrange(activityimp_int2, date) %>% select(interval, date, steps)
 
-activityimp_int2$Method <- rep("Interpolation 2", nrow(activityimp_int2))
+activityimp <- transmute(activityimp, interval = interval, date = date, steps = steps, Method = "Mean Steps")
+activityimp_int2$Method <- rep("Interpolation", nrow(activityimp_int2))
 activityimp_full2 <- rbind(activityimp, activityimp_int2)
 
 activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSIXct(paste("2012-10-01", 
@@ -330,8 +296,8 @@ activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSI
 
 (ggplot(subset(activityimp_fullposix2, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = Method)) + 
                 geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%H") + 
-                labs(x = "Time of Day (24 hr format)", y = "Average Steps Per 5-Min Interval", 
-                title = "Imputation method 3: Avg steps per 5-min interval"))
+                labs(x = "Time of Day (24-hr)", y = "Average Steps Per 5-Min Interval", 
+                title = "Imputation Method Comparison: Avg steps per 5-min interval"))
 ```
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation3-1.png)
@@ -366,16 +332,20 @@ round(median(stepsbydtimp$StepsPerDay) - median(stepsbydt_na$StepsPerDay, na.rm 
 
 By adding the imputed values, the mean did not change at all. This is to be expected, since all 8 days with `NA` values had imputed means equal to the population mean prior to imputing `NA`s. However, the median *Steps Per Day* moves up slightly, since the original `mean`, 10766.19, is slightly higher than the original median, 10765.
 
-We can see the precise change to the distribution most clearly if we do a 2-panel plot, juxtaposing histograms before and after imputing `NA` values. To do this, we first compute a factor variable that will be used to differentiate the two histograms in `ggplot`, then combine the two data frames (with and without imputed data), then call `ggplot`.
+We can see the precise change to the distribution most clearly if we do a panel plot, juxtaposing histograms before and after imputing `NA` values. We also examine the histogram for the imputation done by interpolation. To do this, we first compute a factor variable that will be used to differentiate the three histograms in `ggplot`, then combine the data frames (with NAs imputed by *Mean Steps* by interval, with NAs imputed by *Interpolation*, and with *NAs Excluded*), then call `ggplot`.
 
 ``` r
-# Create factor variable
-NA_Treatment <- as.factor(c(rep("NAs Excluded", nrow(stepsbydt_na)), rep("NAs Imputed", nrow(stepsbydtimp))))
-# Combine the two dataframes
-stepsbydt_impexc <- rbind(stepsbydt_na, stepsbydtimp)
+# Computing histogram info for the interpolated imputation
+stepsbydtimp_int2 <- activityimp_int2 %>% group_by(date) %>% summarize(StepsPerDay 
+                        = sum(steps, na.rm = FALSE))
+# Create factor variable to be used in ggplot
+NA_Treatment <- as.factor(c(rep("NAs Excluded", nrow(stepsbydt_na)), rep("Mean Steps",
+                nrow(stepsbydtimp)), rep("Interpolation", nrow(stepsbydtimp_int2))))
+# Combine the three dataframes
+stepsbydt_impexc <- rbind(stepsbydt_na, stepsbydtimp, stepsbydtimp_int2)
 # Add factor variable to dataframe
 stepsbydt_impexc$NA_Treatment <- NA_Treatment
-# Make 2-panel plot
+# Make 3-panel plot
 (histPanelNAimputed <- ggplot(stepsbydt_impexc, aes(StepsPerDay/1000)) + stat_bin(binwidth = 1,
         center = 0.5, closed = "right", alpha = 0.4, na.rm = FALSE) + 
         scale_x_continuous(minor_breaks = seq(0,22,1), labels = function(x){paste0(x, "K")}) +
@@ -389,7 +359,16 @@ stepsbydt_impexc$NA_Treatment <- NA_Treatment
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/histPanelNAimputed-1.png)
 
-The 8 imputed days are placed exactly on top of the mean of the distribution.
+For the *Mean Steps* imputation, the 8 imputed days are placed exactly on top of the mean of the distribution. For the *Interpolation* method, the re-distribution is more disperse and organic -- perhaps closer to the true distriubtion. Changes in mean and media for *Interpolation* method:
+
+``` r
+round(mean(stepsbydtimp_int2$StepsPerDay) - mean(stepsbydt_na$StepsPerDay, na.rm = TRUE), 0)
+## [1] -394
+round(median(stepsbydtimp_int2$StepsPerDay) - median(stepsbydt_na$StepsPerDay, na.rm = TRUE), 0)
+## [1] -194
+```
+
+Both mean and median decrease when the interpolation method is used.
 
 ------------------------------------------------------------------------
 
