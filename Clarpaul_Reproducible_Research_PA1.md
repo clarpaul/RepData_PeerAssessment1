@@ -81,13 +81,6 @@ We then plot the desired histogram using `ggplot2::ggplot`, and save it in the f
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/histNoNA-1.png)
 
-``` r
-# Saving the histogram as a separate file
-png("figures/histNoNA.png", width = 1000)
-print(histNoNA)
-dev.off()
-```
-
 ------------------------------------------------------------------------
 
 #### 3. Display mean and median steps per day
@@ -160,13 +153,6 @@ stepsbyinttm <- stepsbyintchar %>% transmute(plottime = as.POSIXct(plottime, for
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/stepTimeSeriesAvg-1.png)
 
-``` r
-# Save time series plot in figures directory
-png("figures/stepTimeSeriesAvg.png", width = 1000)
-print(stepTimeSeriesAvg)
-dev.off()
-```
-
 ------------------------------------------------------------------------
 
 #### 5. Report the 5-minute interval with maximum average steps
@@ -228,11 +214,144 @@ activityimp <- activity
 activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
 ```
 
+We now evaluate a different scheme for replacement of missing values, which involves interpolation via application of a function called `na.approx` in the package `zoo`. We follow the method of user *'rndmacc'* on github [here](https://github.com/rndmacc/RepData_PeerAssessment1/blob/master/PA1_template.md).
+
+``` r
+if (!require(zoo)) {install.packages("zoo"); require(zoo)}
+activityimp_int <- activity
+# rndmacc says boundaries won't be interpolated unless start and end are set to 0
+activityimp_int[1,1] <- 0
+activityimp_int[nrow(activityimp_int),1] <- 0
+activityimp_int$steps <- na.approx(activityimp_int$steps)
+```
+
+We now compare the results of interpolation to the mean profile imputation.
+
+``` r
+na_dates <- with(activity, unique(date[is.na(steps)]))
+activityimp$method <- rep("Mean profile", nrow(activityimp))
+activityimp_int$method <- rep("Interpolated", nrow(activityimp_int))
+activityimp_full <- rbind(activityimp, activityimp_int)
+
+activityimp_fullposix <- transmute(activityimp_full, date, plottime =  as.POSIXct(paste("2012-10-01",
+        vtime(interval)), format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, method) 
+
+
+(ggplot(subset(activityimp_fullposix, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = method)) + 
+                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%I") + 
+                labs(x = "Time of Day", y = "Average Steps Per 5-Min Interval", 
+                title = "Imputation method 2: Avg steps per 5-min interval"))
+```
+
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation2-1.png)
+
+We can see here that *rndmacc's* interpolation scheme fails: because `steps` is close to 0 at the border between days (and NAs occur in blocks that are a single day long) it amounts to setting `steps` at or close to 0 for each block.
+
+Better results might be obtained by interpolating across adjacent days. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
+
+``` r
+if (!require(tidyr)) {install.packages("tidyr"); require(tidyr)}
+head(activity)
+```
+
+    ##   steps       date interval
+    ## 1    NA 2012-10-01        0
+    ## 2    NA 2012-10-01        5
+    ## 3    NA 2012-10-01       10
+    ## 4    NA 2012-10-01       15
+    ## 5    NA 2012-10-01       20
+    ## 6    NA 2012-10-01       25
+
+``` r
+activity_matrix <- spread(data = activity, key = interval, value = steps) %>% tbl_df
+```
+
+Note that there is no way to interpolate the first and last dates, as they are at the boundaries of the matrix:
+
+``` r
+subset(activity_matrix, date %in% na_dates)[,1:10]
+```
+
+    ## # A tibble: 8 × 10
+    ##         date   `0`   `5`  `10`  `15`  `20`  `25`  `30`  `35`  `40`
+    ##        <chr> <int> <int> <int> <int> <int> <int> <int> <int> <int>
+    ## 1 2012-10-01    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 2 2012-10-08    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 3 2012-11-01    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 4 2012-11-04    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 5 2012-11-09    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 6 2012-11-10    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 7 2012-11-14    NA    NA    NA    NA    NA    NA    NA    NA    NA
+    ## 8 2012-11-30    NA    NA    NA    NA    NA    NA    NA    NA    NA
+
+But we can interpolate all the other NA rows:
+
+``` r
+activity_matrix_imp <- activity_matrix
+activity_matrix_imp[,-1] <- na.approx(object = activity_matrix[,-1], na.rm = FALSE)
+format(subset(activity_matrix_imp, date %in% na_dates)[,1:10], digits = 3, nsmall = 2)
+```
+
+    ##         date    0    5   10   15   20   25    30   35   40
+    ## 1 2012-10-01   NA   NA   NA   NA   NA   NA    NA   NA   NA
+    ## 2 2012-10-08 0.00 0.00 0.00 0.00 0.00 6.50 14.00 0.00 0.00
+    ## 3 2012-11-01 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
+    ## 4 2012-11-04 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
+    ## 5 2012-11-09 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
+    ## 6 2012-11-10 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
+    ## 7 2012-11-14 0.00 0.00 0.00 0.00 0.00 0.00  0.00 0.00 0.00
+    ## 8 2012-11-30   NA   NA   NA   NA   NA   NA    NA   NA   NA
+
+To complete the imputation, we now set the first and last rows equal to the column means of the rest of the interpolated matrix.
+
+``` r
+activity_matrix_imp2 <- activity_matrix_imp
+activity_matrix_imp2[1,-1] <- colMeans(activity_matrix_imp[,-1], na.rm = TRUE)
+activity_matrix_imp2[nrow(activity_matrix_imp),-1] <- colMeans(activity_matrix_imp[,-1], na.rm = TRUE)
+subset(activity_matrix_imp2, date %in% na_dates)[,1:10]
+```
+
+    ## # A tibble: 8 × 10
+    ##         date      `0`       `5`      `10`      `15`       `20`     `25`
+    ##        <chr>    <dbl>     <dbl>     <dbl>     <dbl>      <dbl>    <dbl>
+    ## 1 2012-10-01 1.542373 0.3050847 0.1186441 0.1355932 0.06779661 1.991525
+    ## 2 2012-10-08 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 6.500000
+    ## 3 2012-11-01 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
+    ## 4 2012-11-04 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
+    ## 5 2012-11-09 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
+    ## 6 2012-11-10 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
+    ## 7 2012-11-14 0.000000 0.0000000 0.0000000 0.0000000 0.00000000 0.000000
+    ## 8 2012-11-30 1.542373 0.3050847 0.1186441 0.1355932 0.06779661 1.991525
+    ## # ... with 3 more variables: `30` <dbl>, `35` <dbl>, `40` <dbl>
+
+``` r
+activityimp_int2 <- gather(data = activity_matrix_imp2, key = interval, value = steps, -1, convert = TRUE)
+activityimp_int2 <- arrange(activityimp_int2, date) %>% select(interval, date, steps)
+```
+
+We now plot the results of this method of interpolation on the 8 interpolated days of data.
+
+``` r
+activityimp_int2$method <- rep("Interpolated", nrow(activityimp_int2))
+activityimp_full2 <- rbind(activityimp, activityimp_int2)
+
+activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSIXct(paste("2012-10-01", vtime(interval)), 
+                        format = "%Y-%m-%d %H:%M"), StepsPerMin = steps/5, method) 
+
+
+(ggplot(subset(activityimp_fullposix2, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = method)) + 
+                geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%I") + 
+                labs(x = "Time of Day", y = "Average Steps Per 5-Min Interval", 
+                title = "Imputation method 3: Avg steps per 5-min interval"))
+```
+
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation3-1.png)
+
 ------------------------------------------------------------------------
 
 #### 7. Evaluate distribution of Steps Per Day with imputed data
 
-As in section (2), we group our data by `date` and sum over `steps`.
+Here we utilize the first method of imputing data (the **'Mean profile'** approach). As in section (2), we group our data by `date` and sum over `steps`.
 
 ``` r
 stepsbydtimp <- activityimp %>% group_by(date) %>% summarize(StepsPerDay = sum(steps, na.rm = FALSE))
@@ -283,14 +402,6 @@ stepsbydt_impexc$NA_Treatment <- NA_Treatment
 
 The 8 imputed days are placed exactly on top of the mean of the distribution.
 
-``` r
-# Save figure to disk, for safe-keeping
-png("figures/histPanelNAimputed.png")
-print(histPanelNAimputed)
-## Warning: Removed 8 rows containing non-finite values (stat_bin).
-dev.off()
-```
-
 ------------------------------------------------------------------------
 
 #### 8. Compare average time series of weekday and weekend steps per interval
@@ -338,13 +449,6 @@ stepsbytmdytype <- stepsbyintchardytype %>% as.data.frame %>% transmute(plottime
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/stepTimeSeriesPanel-1.png)
 
-``` r
-# Save a version of the plot in the figures directory
-png("figures/stepTimeSeriesPanel.png", width = 800)
-print(stepTimeSeriesPanel)
-dev.off()
-```
-
 By eye-balling the charts, one can see that on weekends (as compared to weekdays) our walker is slower reaching maximum speed, has a lower maximum speed, and is active later in the day. I.e., the distribution of steps has its final local maximum around 8 PM or so on weekends, vs. 7 PM on weekdays.
 
 ------------------------------------------------------------------------
@@ -376,13 +480,13 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] ggplot2_2.2.0 dplyr_0.5.0  
+    ## [1] tidyr_0.6.0   zoo_1.7-14    ggplot2_2.2.0 dplyr_0.5.0  
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] Rcpp_0.12.8      digest_0.6.10    rprojroot_1.1    assertthat_0.1  
-    ##  [5] plyr_1.8.4       grid_3.3.2       R6_2.2.0         gtable_0.2.0    
-    ##  [9] DBI_0.5-1        backports_1.0.4  magrittr_1.5     scales_0.4.1    
-    ## [13] evaluate_0.10    stringi_1.1.2    reshape2_1.4.2   lazyeval_0.2.0  
-    ## [17] rmarkdown_1.3    labeling_0.3     tools_3.3.2      stringr_1.1.0   
-    ## [21] munsell_0.4.3    yaml_2.1.14      colorspace_1.3-2 htmltools_0.3.5 
-    ## [25] knitr_1.15.1     tibble_1.2
+    ##  [1] Rcpp_0.12.8      knitr_1.15.1     magrittr_1.5     munsell_0.4.3   
+    ##  [5] colorspace_1.3-2 lattice_0.20-34  R6_2.2.0         stringr_1.1.0   
+    ##  [9] plyr_1.8.4       tools_3.3.2      grid_3.3.2       gtable_0.2.0    
+    ## [13] DBI_0.5-1        htmltools_0.3.5  yaml_2.1.14      lazyeval_0.2.0  
+    ## [17] assertthat_0.1   rprojroot_1.1    digest_0.6.10    tibble_1.2      
+    ## [21] reshape2_1.4.2   evaluate_0.10    rmarkdown_1.3    labeling_0.3    
+    ## [25] stringi_1.1.2    scales_0.4.1     backports_1.0.4
