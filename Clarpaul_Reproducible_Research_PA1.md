@@ -10,7 +10,9 @@ December 25, 2016
     -   [4. Plot time series of average steps per interval](#plot-time-series-of-average-steps-per-interval)
     -   [5. Report the 5-minute interval with maximum average steps](#report-the-5-minute-interval-with-maximum-average-steps)
     -   [6. Impute missing data](#impute-missing-data)
-    -   [7. Evaluate distribution of Steps Per Day with imputed data](#evaluate-distribution-of-steps-per-day-with-imputed-data)
+        -   [6.1 Method 1: Replace NAs with *Mean Steps by Interval*](#method-1-replace-nas-with-mean-steps-by-interval)
+        -   [6.2 Method 2: Replace NAs with *Interpolated values*](#method-2-replace-nas-with-interpolated-values)
+    -   [7. Evaluate distribution of *Steps Per Day* with imputed data](#evaluate-distribution-of-steps-per-day-with-imputed-data)
     -   [8. Compare average time series of weekday and weekend steps per interval](#compare-average-time-series-of-weekday-and-weekend-steps-per-interval)
     -   [9. Confirm visibility of all code used](#confirm-visibility-of-all-code-used)
 -   [Appendix: Session Info for Reproducibility of Results](#appendix-session-info-for-reproducibility-of-results)
@@ -197,7 +199,7 @@ The 8 days in question are the following:
 ## [6] "2012-11-10" "2012-11-14" "2012-11-30"
 ```
 
-##### 6.1 Imputing missing values: Mean Steps by Interval
+##### 6.1 Method 1: Replace NAs with *Mean Steps by Interval*
 
 We now create a new data set `activityimp` by replacing each missing `steps` value in `activity` with the value for the associated 5-minute interval computed by averaging across all days (we call this the ***Mean Steps by Interval*** method of imputing the data). Since we know the exact locations of all the `NA`s, we could replace the values rather simply. Instead, we use a more general procedure by following these steps:
 
@@ -217,9 +219,9 @@ activityimp <- activity
 activityimp$steps[is.na(activity$steps)] <- 5*(stepsbyint$StepsPerMin[NAindices])
 ```
 
-##### 6.2 Imputing missing values: Interpolation
+##### 6.2 Method 2: Replace NAs with *Interpolated values*
 
-Next we impute missing days by interpolating values from adjacent days. We do this by application of a function called `na.approx()` in the package `zoo`. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
+Next we impute missing days by interpolating values from adjacent days. We can get some sense of this by looking at the steps per day as a function of date. We do this by application of a function called `na.approx()` in the package `zoo`. We start by using `tidyr` to `spread` the `activity` data frame into 'wide' format: a matrix with intervals across the columns, and one date per row.
 
 ``` r
 # Note: we turn the matrix into a tbl_df, for better printing; tbl_df is loaded with one of the
@@ -227,7 +229,7 @@ Next we impute missing days by interpolating values from adjacent days. We do th
 activity_matrix <- spread(data = activity, key = interval, value = steps) %>% tbl_df
 ```
 
-Note that there is no way to interpolate the first and last dates, as they are at the boundaries of the matrix. (Note that the last date is 2012-11-30.) The other dates are surrounded by non-NA values.
+Note that there is no way to interpolate the first and last dates of the 2-month period (2012-10-01 and 2012-11-30), as they are at the boundaries of the matrix. The other dates are surrounded by non-NA value and can be interpolated.
 
 ``` r
 subset(activity_matrix, date %in% na_dates, select = c(1, `830`:`915`))
@@ -283,7 +285,7 @@ We now plot the results of this method of interpolation on the 8 interpolated da
 
 ``` r
 activityimp_int2 <- gather(data = activity_matrix_imp2, key = interval, value = steps, -1, convert = TRUE)
-activityimp_int2 <- arrange(activityimp_int2, date) %>% select(interval, date, steps)
+activityimp_int2 <- arrange(activityimp_int2, date, interval) %>% select(interval, date, steps)
 
 activityimp <- transmute(activityimp, interval = interval, date = date, steps = steps, Method = "Mean Steps")
 activityimp_int2$Method <- rep("Interpolation", nrow(activityimp_int2))
@@ -296,14 +298,33 @@ activityimp_fullposix2 <- transmute(activityimp_full2, date, plottime =  as.POSI
 (ggplot(subset(activityimp_fullposix2, date %in% na_dates), aes(plottime, 5*StepsPerMin, color = Method)) + 
                 geom_line() +  facet_wrap(~date) + scale_x_datetime(date_labels = "%H") + 
                 labs(x = "Time of Day (24-hr)", y = "Average Steps Per 5-Min Interval", 
-                title = "Imputation Method Comparison: Avg steps per 5-min interval"))
+                title = "Comparison of Interpolation Methods on Avg steps per interval"))
 ```
 
-![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation3-1.png)
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/interpolation_visual-1.png)
+
+We now evaluate, for one interpolated date, how well it appears to represent the data.
+
+``` r
+activityimp_int2_posix_mthd <- transmute(activityimp_int2, date, plottime = 
+                as.POSIXct(paste("2012-10-01", vtime(interval)), format = "%Y-%m-%d %H:%M"),
+                StepsPerMin = steps/5, Method = ifelse(!(date %in% na_dates), "Original Data", Method))
+
+(ggplot(subset(activityimp_int2_posix_mthd, date %in% c(na_dates[[3]],
+                as.character(as.Date(na_dates[[3]]) - 1), as.character(as.Date(na_dates[[3]]) + 1))),
+                aes(x = plottime, y = 5*StepsPerMin, color = Method)) + 
+                geom_line() + facet_grid(date~.) + scale_x_datetime(date_labels = "%I %p") + 
+                labs(x = "Time of Day (12 hr)", y = "Average Steps Per 5-Min Interval", 
+                title = paste("Interpolation of", na_dates[[3]])))
+```
+
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/interpolation_eval-1.png)
+
+From this plot, it appears as if due to varying timings of *Steps per Interval*, interpolation may not provide good detailed representations: different positions of local maxima in the original data result in multiple local maxima in the interpolated results. Depending on how we use these profiles, interpolated results may or may not be an improvement over the *Mean Steps by Interval* method. However, one strategy that might improve upon this effect is to interpolate weekdays and weekend days separately: i.e., use adjacent weekdays to interpolate missing weekdays, and use adjacent weekend days to interpolate missing weekend days.
 
 ------------------------------------------------------------------------
 
-#### 7. Evaluate distribution of Steps Per Day with imputed data
+#### 7. Evaluate distribution of *Steps Per Day* with imputed data
 
 Here we utilize the first method of imputing data (the ***Mean Steps by Interval*** approach). As in section (2), we group our data by `date` and sum over `steps`.
 
@@ -314,7 +335,7 @@ stepsbydtimp <- activityimp %>% group_by(date) %>% summarize(StepsPerDay = sum(s
 The new `mean` and `median` number of steps taken each day:
 
 ``` r
-print(format(summary(stepsbydtimp$StepsPerDay, na.rm = FALSE, digits = 7), big.mark = ",", nsmall =2), quote = FALSE)
+print(format(summary(stepsbydtimp$StepsPerDay, na.rm = FALSE, digits = 7), big.mark = ",", nsmall = 2), quote = FALSE)
 ```
 
     ##      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
@@ -331,7 +352,7 @@ round(median(stepsbydtimp$StepsPerDay) - median(stepsbydt_na$StepsPerDay, na.rm 
 
 By adding the imputed values, the mean did not change at all. This is to be expected, since all 8 days with `NA` values had imputed means equal to the population mean prior to imputing `NA`s. However, the median *Steps Per Day* moves up slightly, since the original `mean`, 10766.19, is slightly higher than the original median, 10765.
 
-We can see the precise change to the distribution most clearly if we do a panel plot, juxtaposing histograms before and after imputing `NA` values. We also examine the histogram for the imputation done by interpolation. To do this, we first compute a factor variable that will be used to differentiate the three histograms in `ggplot`, then combine the data frames (with NAs imputed by *Mean Steps* by interval, with NAs imputed by *Interpolation*, and with *NAs Excluded*), then call `ggplot`.
+We can see the precise change to the distribution most clearly if we do a panel plot, juxtaposing histograms before and after imputing `NA` values. We also examine the histogram for the imputation done by *Interpolation*. To do this, we first compute a factor variable that will be used to differentiate the three histograms in `ggplot`, then combine the data frames (with NAs imputed by *Mean Steps* by interval, with NAs imputed by *Interpolation*, and with *NAs Excluded*), then call `ggplot`.
 
 ``` r
 # Computing histogram info for the interpolated imputation
@@ -358,7 +379,7 @@ stepsbydt_impexc$NA_Treatment <- NA_Treatment
 
 ![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/histPanelNAimputed-1.png)
 
-For the *Mean Steps* imputation, the 8 imputed days are placed exactly on top of the mean of the distribution. For the *Interpolation* method, the re-distribution is more disperse and organic -- perhaps closer to the true distriubtion. Changes in mean and media for *Interpolation* method:
+For the *Mean Steps* imputation, the 8 imputed days are placed exactly on top of the mean of the distribution. For the *Interpolation* method, the re-distribution is more disperse and organic -- perhaps closer to the true distribution (more on this, later). Changes in mean and media for the *Interpolation* method:
 
 ``` r
 round(mean(stepsbydtimp_int2$StepsPerDay) - mean(stepsbydt_na$StepsPerDay, na.rm = TRUE), 0)
@@ -367,7 +388,24 @@ round(median(stepsbydtimp_int2$StepsPerDay) - median(stepsbydt_na$StepsPerDay, n
 ## [1] -194
 ```
 
-Both mean and median decrease when the interpolation method is used.
+Both mean and median decrease when the *Interpolation* method is used. We expect that if the distribution of *Steps per Day* is at all local in time (i.e., smoothly varying), *Interpolation* probably provides a better representation of the distribution (histogram) of *Steps per Day* than *Mean Steps per Interval*. For purposes of histograms (discussed in the next section), *Mean Steps per Interval* amounts to using the **average** *Steps per Day* for all interpolated dates.
+
+To evaluate this point, we plot *Steps per Day* and mean *Steps per Day* as a function of date, leaving the NAs in:
+
+``` r
+stepsbydt_asdt_na <- stepsbydt_na
+stepsbydt_asdt_na$asDate <- as.Date(stepsbydt_na$date)
+(ggplot(stepsbydt_asdt_na, aes(x = asDate)) + geom_line(aes(y = StepsPerDay/1000, color = "Actual")) +
+        geom_hline(aes(yintercept = mean(stepsbydt_na$StepsPerDay/1000, na.rm = TRUE), color = "Mean")) +
+        scale_color_manual("", values = c("Actual" = "black", "Mean" = "red")) + labs(x = 
+        "Date", y = "Thousand Steps Per Day", title = "Daily Steps: Actuals and Mean (NAs not plotted)"))
+```
+
+    ## Warning: Removed 2 rows containing missing values (geom_path).
+
+![](Clarpaul_Reproducible_Research_PA1_files/figure-markdown_github/imputation_eval-1.png)
+
+**Daily Steps** is quite volatile, therefore it is unclear if *interpolation* provides improved information (for the purpose of histograms) vs. *Mean Steps by Interval*. *Mean Steps by Interval* may provide a profile with less **variance** error (i.e, overfitting) than *interpolation*, but it also may generate more **bias**, as its estimates are all at the mean of the data -- an unnatural outcome.
 
 ------------------------------------------------------------------------
 
@@ -390,7 +428,8 @@ activityimp$dayofwk <- with(activityimp, weekdays(posixdate, abbreviate = TRUE))
 activityimp$daytype <- with(activityimp, as.factor(ifelse(dayofwk == "Sat" | dayofwk == "Sun", "weekend","weekday")))
 # Use dplyr to simultaneously call 'group_by' on the 'activityimp' dataframe with arguments
 # 'interval' and 'daytype', then call 'summarize' on 'steps' using the `mean()` function.
-stepsbyintdytype <- activityimp %>% group_by(interval, daytype) %>% summarize(StepsPerMin = mean(steps, na.rm = TRUE)/5)
+stepsbyintdytype <- activityimp %>% group_by(interval, daytype) %>% summarize(StepsPerMin = 
+                        mean(steps, na.rm = TRUE)/5)
 ```
 
 The remaining steps are just like those in (4), with the exception of the call to `facet_grid()` with `ggplot()`.
